@@ -3,23 +3,31 @@
 #include <vector>
 #include <math.h>
 #include <unordered_map>
-#include "string.h"
+#include <string>
+#include <time.h>
 using namespace std;
 
-vector<int> GetRelatieEssenCubes(vector<vector<int>> cubelist);
-vector<int> GetRedudantCubes(vector<vector<int>> cubelist, vector<int> RelativeEssencol);
-bool URPCubeContain(vector<vector<int>> cubelist, int termid);
-bool URPTautologyCheck(vector<vector<int>> cubelist, unordered_map<int, int> selectflag);
+
+vector<int> GetRelativeEssenCubes(vector<vector<int>> cubelist, ofstream& ofs);
+vector<int> GetRedudantCubes(vector<vector<int>> cubelist, vector<int> RelativeEssencol, ofstream& ofs);
+bool URPCubeContain(vector<vector<int>> cubelist, int termid, ofstream& ofs);
+bool URPTautologyCheck(vector<vector<int>> cubelist, unordered_map<int, int> selectflag, ofstream& ofs);
 vector<vector<int>> CubelistAssign(vector<vector<int>> cubelist, int col_chosen, int pos_flag);
 bool JudgeAllDCCube(vector<vector<int>> cubelist);
 bool JudgeUnate(vector<vector<int>> cubelist);
 bool JudgeColumnUnate(vector<int> cubelistColumn);
 bool JudgeSingleVarPolar(vector<vector<int>> cubelist);
 int FindMostBinateVar(vector<vector<int>> cubelist, unordered_map<int,int> selectflag);
+vector<vector<int>> UnateReduction(vector<vector<int>> cubelist);
+vector<int> FindDCrows(vector<vector<int>> cubelist, vector<int> col);
+
 
 
 int main(int argc, char* argv[])
 {
+    clock_t startTime, endTime;
+    startTime = clock();
+
     if(argc<3 || argc>4)
     {
         cout<<"usage: reduce <in_file> <out_file> [unate_reduce_log_file]"<<endl;
@@ -62,20 +70,14 @@ int main(int argc, char* argv[])
         vector<int> RelativeEssencol;
         vector<int> Redundantcol;
 
-        RelativeEssencol = GetRelatieEssenCubes(cubelist);
-        /*
-        for(int i=0; i<RelativeEssencol.size(); i++)
-            cout<<RelativeEssencol[i]<<' ';
-        cout<<endl;
-        */
+        ofstream ofs1;
+        ofs1.open(unate_reduct_file_name, ios::out);
+        RelativeEssencol = GetRelativeEssenCubes(cubelist, ofs1);
 
-        Redundantcol = GetRedudantCubes(cubelist, RelativeEssencol);
-        /*
-        for(int i=0; i<Redundantcol.size(); i++)
-            cout<<Redundantcol[i]<<' ';
-        cout<<endl;
-        */
+        Redundantcol = GetRedudantCubes(cubelist, RelativeEssencol, ofs1);
 
+        ofs1.close();
+        
         unordered_map<int, int> Redundantmap;
         for(int i=0; i<Redundantcol.size(); i++)
             Redundantmap[Redundantcol[i]]= 1;
@@ -87,6 +89,7 @@ int main(int argc, char* argv[])
                 cubelistremain.push_back(cubelist[i]);
         }
 
+        /*
         cout<<cubelistremain.size()<<endl;
 
         for(int i=0; i<cubelistremain.size(); i++)
@@ -95,18 +98,41 @@ int main(int argc, char* argv[])
                 cout<<cubelistremain[i][j]<<' ';
             cout<<endl;
         }
+        */
+
+        ofstream ofs2;
+        ofs2.open(out_file_name, ios::out);
+
+        if(cubelistremain.size()>0)
+            ofs2<<cubelistremain[0].size()<<endl;
+        else
+            ofs2<<0<<endl;
+
+        ofs2<<to_string(cubelistremain.size())<<endl;
+
+        for(int i=0; i<cubelistremain.size(); i++)
+        {
+            for(int j=0; j<cubelistremain[0].size(); j++)
+                ofs2<<cubelistremain[i][j];
+            ofs2<<endl;
+        }
+
+        ofs2.close();        
 
     }
+
+    endTime = clock();
+    cout<<"Total TIME:"<<(double) (endTime - startTime) / CLOCKS_PER_SEC << "s"<<endl;
 
     return 0;
 }
 
-vector<int> GetRelatieEssenCubes(vector<vector<int>> cubelist)
+vector<int> GetRelativeEssenCubes(vector<vector<int>> cubelist, ofstream& ofs)
 {
     vector<int> RelativeEssencol;
     for(int i=0; i<cubelist.size(); i++)
     {
-        if(!URPCubeContain(cubelist, i))
+        if(!URPCubeContain(cubelist, i, ofs))
         {   //cout<<'d'<<endl;
             RelativeEssencol.push_back(i);
         }
@@ -115,7 +141,7 @@ vector<int> GetRelatieEssenCubes(vector<vector<int>> cubelist)
     
 }
 
-vector<int> GetRedudantCubes(vector<vector<int>> cubelist, vector<int> RelativeEssencol)
+vector<int> GetRedudantCubes(vector<vector<int>> cubelist, vector<int> RelativeEssencol, ofstream& ofs)
 {
     unordered_map<int, int> RelativeEssencolmap;
     vector<vector<int>> cubelistnew;
@@ -133,7 +159,7 @@ vector<int> GetRedudantCubes(vector<vector<int>> cubelist, vector<int> RelativeE
         if(RelativeEssencolmap.find(i) == RelativeEssencolmap.end())
         {
             cubelistnew.push_back(cubelist[i]);
-            if(URPCubeContain(cubelistnew, cubelistnew.size()-1))
+            if(URPCubeContain(cubelistnew, cubelistnew.size()-1, ofs))
                 Redundantcol.push_back(i);
             cubelistnew.pop_back();
         }
@@ -143,7 +169,7 @@ vector<int> GetRedudantCubes(vector<vector<int>> cubelist, vector<int> RelativeE
 }
 
 
-bool URPCubeContain(vector<vector<int>> cubelist, int termid)
+bool URPCubeContain(vector<vector<int>> cubelist, int termid, ofstream& ofs)
 {
     vector<vector<int>> cubelistnew;
     unordered_map<int, int> cubedeleteidmap;
@@ -200,14 +226,14 @@ bool URPCubeContain(vector<vector<int>> cubelist, int termid)
     */
 
     unordered_map<int,int> selectflag;
-    Containflag = URPTautologyCheck(cubelistnew, selectflag);
+    Containflag = URPTautologyCheck(cubelistnew, selectflag, ofs);
     //cout<<Containflag<<endl;
     //cout<<'d'<<endl;
 
     return Containflag;
 }
 
-bool URPTautologyCheck(vector<vector<int>> cubelist, unordered_map<int, int> selectflag)
+bool URPTautologyCheck(vector<vector<int>> cubelist, unordered_map<int, int> selectflag, ofstream& ofs)
 {
     if(cubelist.size() == 0)
         return false;
@@ -220,21 +246,83 @@ bool URPTautologyCheck(vector<vector<int>> cubelist, unordered_map<int, int> sel
     
     if(JudgeSingleVarPolar(cubelist))
         return true;
-    
-    int col_chosen = FindMostBinateVar(cubelist, selectflag);
+
+    if(cubelist.size()>0)
+        ofs<<cubelist[0].size()<<endl;
+    else
+        ofs<<0<<endl;
+
+    ofs<<cubelist.size()<<endl;
+
+    for(int i=0; i<cubelist.size(); i++)
+    {
+        for(int j=0; j<cubelist[0].size(); j++)
+            ofs<<cubelist[i][j];
+        ofs<<endl;
+    }
+
+    vector<vector<int>> cubelistnew;
+    cubelistnew = UnateReduction(cubelist);
+
+    if(cubelistnew.size()>0)
+        ofs<<cubelistnew[0].size()<<endl;
+    else
+        ofs<<0<<endl;
+
+    ofs<<cubelistnew.size()<<endl;
+
+    for(int i=0; i<cubelistnew.size(); i++)
+    {
+        for(int j=0; j<cubelistnew[0].size(); j++)
+            ofs<<cubelistnew[i][j];
+        ofs<<endl;
+    }
+
+    //cout<<'a'<<endl;
+    int col_chosen = FindMostBinateVar(cubelistnew, selectflag);
     selectflag[col_chosen] = 1;
     //cout<<col_chosen<<endl;
     //cout<<'b'<<endl;
     
     vector<vector<int>> cubelistpos;
     vector<vector<int>> cubelistneg;
-    cubelistpos = CubelistAssign(cubelist, col_chosen, 1);
-    cubelistneg = CubelistAssign(cubelist, col_chosen, 0);
+    cubelistpos = CubelistAssign(cubelistnew, col_chosen, 1);
+    cubelistneg = CubelistAssign(cubelistnew, col_chosen, 0);
 
     //cout<<cubelistpos.size()<<endl;
     //cout<<cubelistneg.size()<<endl;
 
-    return URPTautologyCheck(cubelistpos, selectflag) && URPTautologyCheck(cubelistneg, selectflag);
+    return URPTautologyCheck(cubelistpos, selectflag, ofs) && URPTautologyCheck(cubelistneg, selectflag, ofs);
+}
+
+vector<vector<int>> UnateReduction(vector<vector<int>> cubelist)
+{
+    vector<vector<int>> cubelistnew;
+    vector<int> xarray;
+    vector<int> yunate;
+
+    if(cubelist.size()==0)
+        return cubelist;
+
+    for(int i=0; i<cubelist[0].size(); i++)
+    {
+        vector<int> column;
+        for(int j=0; j<cubelist.size(); j++)
+            column.push_back(cubelist[j][i]);
+        if(JudgeColumnUnate(column))
+            yunate.push_back(i);
+    }
+
+    xarray = FindDCrows(cubelist, yunate);
+
+    for(int i=0; i<xarray.size(); i++)
+        cubelistnew.push_back(cubelist[xarray[i]]);
+    
+    return cubelistnew;
+    
+    //cubelist = cubelistnew;
+    //cout<<cubelistnew.size()<<' '<<cubelistnew[0].size()<<endl;
+
 }
 
 vector<vector<int>> CubelistAssign(vector<vector<int>> cubelist, int col_chosen, int pos_flag)
@@ -305,6 +393,30 @@ bool JudgeAllDCCube(vector<vector<int>> cubelist)
     }
 
     return false;
+}
+
+vector<int> FindDCrows(vector<vector<int>> cubelist, vector<int> col)
+{
+    vector<int> xarray;
+    bool flag_all_dc;
+
+    for(int i=0; i<cubelist.size(); i++)
+    {
+        flag_all_dc = true;
+        for(int j=0; j<col.size(); j++)
+        {
+            if(cubelist[i][col[j]]!=2)
+            {
+                flag_all_dc = false;
+                break;
+            }
+        }
+
+        if(flag_all_dc)
+            xarray.push_back(i);
+    }
+
+    return xarray;
 }
 
 bool JudgeUnate(vector<vector<int>> cubelist)
@@ -389,6 +501,9 @@ int FindMostBinateVar(vector<vector<int>> cubelist, unordered_map<int,int> selec
     int num_one;
     int most_binate_metric = cubelist.size();
     int most_binate_col = 0;
+
+    if(cubelist.size()==0)
+        return -1;
 
     for(int i=0; i<cubelist[0].size(); i++)
     {
